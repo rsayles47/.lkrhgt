@@ -1,0 +1,138 @@
+ [Header("Player")]
+    public float moveSpeed = 6f;
+    public float mouseSensitivity = 2.5f;
+    public Transform cameraPivot;
+    CharacterController controller;
+    float xRotation = 0f;
+
+    [Header("Time Loop")]
+    public float loopDuration = 30f;
+    float timer;
+    Vector3 startPos;
+    Quaternion startRot;
+
+    [Header("Interaction")]
+    public float interactRange = 4f;
+
+    [Header("Shooting")]
+    public GameObject projectilePrefab;
+    public Transform firePoint;
+
+    // Persistent objects
+    List<GameObject> persistentObjects = new List<GameObject>();
+    Dictionary<GameObject, bool> activatedStates = new Dictionary<GameObject, bool>();
+    Dictionary<GameObject, Vector3> startPositions = new Dictionary<GameObject, Vector3>();
+
+    void Start()
+    {
+        controller = GetComponent<CharacterController>();
+        Cursor.lockState = CursorLockMode.Locked;
+
+        timer = loopDuration;
+        startPos = transform.position;
+        startRot = transform.rotation;
+
+        // Find all objects tagged "Persistent"
+        GameObject[] objs = GameObject.FindGameObjectsWithTag("Persistent");
+        foreach (GameObject obj in objs)
+        {
+            persistentObjects.Add(obj);
+            activatedStates[obj] = false;
+            startPositions[obj] = obj.transform.position;
+        }
+    }
+
+    void Update()
+    {
+        Move();
+        Look();
+        HandleInteraction();
+        HandleShooting();
+        HandleLoop();
+    }
+
+    void Move()
+    {
+        float x = Input.GetAxis("Horizontal");
+        float z = Input.GetAxis("Vertical");
+
+        Vector3 move = transform.right * x + transform.forward * z;
+        controller.Move(move * moveSpeed * Time.deltaTime);
+    }
+
+    void Look()
+    {
+        float mouseX = Input.GetAxis("Mouse X") * 100f * mouseSensitivity * Time.deltaTime;
+        float mouseY = Input.GetAxis("Mouse Y") * 100f * mouseSensitivity * Time.deltaTime;
+
+        xRotation -= mouseY;
+        xRotation = Mathf.Clamp(xRotation, -80f, 80f);
+
+        cameraPivot.localRotation = Quaternion.Euler(xRotation, 0f, 0f);
+        transform.Rotate(Vector3.up * mouseX);
+    }
+
+    void HandleInteraction()
+    {
+        if (Input.GetKeyDown(KeyCode.E))
+        {
+            Ray ray = new Ray(Camera.main.transform.position, Camera.main.transform.forward);
+            RaycastHit hit;
+
+            if (Physics.Raycast(ray, out hit, interactRange))
+            {
+                GameObject obj = hit.collider.gameObject;
+
+                if (persistentObjects.Contains(obj))
+                {
+                    activatedStates[obj] = true;
+
+                    // Example effect
+                    obj.transform.localScale *= 1.5f;
+                    obj.GetComponent<Renderer>().material.color = Color.red;
+                }
+            }
+        }
+    }
+
+    void HandleShooting()
+    {
+        if (Input.GetMouseButtonDown(0))
+        {
+            GameObject proj = Instantiate(projectilePrefab, firePoint.position, firePoint.rotation);
+            Rigidbody rb = proj.GetComponent<Rigidbody>();
+            rb.velocity = firePoint.forward * 15f;
+            Destroy(proj, 3f);
+        }
+    }
+
+    void HandleLoop()
+    {
+        timer -= Time.deltaTime;
+
+        if (timer <= 0f)
+        {
+            ResetLoop();
+        }
+    }
+
+    void ResetLoop()
+    {
+        timer = loopDuration;
+
+        // Reset player
+        transform.position = startPos;
+        transform.rotation = startRot;
+
+        // Reset world
+        foreach (GameObject obj in persistentObjects)
+        {
+            if (!activatedStates[obj])
+            {
+                obj.transform.position = startPositions[obj];
+                obj.transform.localScale = Vector3.one;
+                obj.GetComponent<Renderer>().material.color = Color.white;
+            }
+        }
+    }
+}
